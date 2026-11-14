@@ -9,7 +9,7 @@ mcp:
   session_timeout_seconds: 600 # 空闲会话超时秒数
   max_request_body_bytes: 0 # 请求体上限字节, 0 表示用 SDK 默认值
   disable_localhost_protection: false # 经隧道或反向代理访问时改为 true
-  stateless: false # 会话模式: false 维持会话(默认), true 不维持会话, 每个请求独立
+  stateless: true # 会话模式: true 不维持会话, 每个请求独立; false 维持会话, 服务重启或空闲超时会让旧客户端失效
 
 database:
   query_timeout_seconds: 30 # 单条语句超时秒数
