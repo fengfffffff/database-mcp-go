@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据库代理 · 数据源管理</title>
+  <link rel="stylesheet" href="/admin/assets/element-plus.min.css">
+  <style>
+    html, body { margin: 0; padding: 0; background: var(--el-bg-color-page, #f5f7fa); }
+    body { font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif; }
+    #app { padding: 16px 20px 24px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .page-header__title { font-size: 16px; font-weight: 600; color: var(--el-text-color-primary); }
+    .page-header__meta { font-size: 12px; color: var(--el-text-color-secondary); }
+    .type-cards { display: flex; gap: 10px; margin-bottom: 12px; }
+    .type-card {
+      flex: 1; min-width: 0; padding: 13px 16px; cursor: pointer; text-align: center;
+      border: 1px solid var(--el-border-color-lighter); border-left: 3px solid var(--el-border-color-lighter);
+      border-radius: 8px; background-color: var(--el-fill-color-light);
+      transition: border-color .2s ease, background-color .2s ease, transform .2s ease;
+      font-variant-numeric: tabular-nums;
+    }
+    .type-card:hover { border-color: var(--card-color); transform: translateY(-1px); }
+    .type-card.is-active { border-color: var(--card-color); background-color: var(--card-bg); }
+    .type-card__label { display: block; margin-bottom: 6px; color: var(--el-text-color-regular); font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+    .type-card__count { color: var(--card-color); font-size: 22px; font-weight: 600; line-height: 1.2; }
+    .page-search { margin-bottom: 12px; }
+    .page-search .el-form-item { margin-bottom: 0; margin-right: 16px; }
+    .page-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .page-toolbar__left .el-button + .el-button { margin-left: 8px; }
+    .el-card { border-radius: 8px; }
+    .el-form-item__label { font-weight: 400; }
+    .col-checks { max-height: 320px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+    /* 详情弹窗: 分区标题与明细单元 */
+    .crud-detail-scroll { max-height: 68vh; overflow-y: auto; padding-right: 6px; }
+    .detail-section { margin-bottom: 20px; }
+    .detail-section:last-child { margin-bottom: 0; }
+    .detail-section__title {
+      margin: 0 0 14px; padding-left: 10px;
+      border-left: 3px solid var(--el-color-primary);
+      color: var(--el-text-color-primary);
+      font-size: 14px; font-weight: 600; line-height: 1.2;
+    }
+    .detail-section__grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .info-cell {
+      padding: 10px 12px; border-radius: 4px;
+      background-color: var(--el-fill-color-light);
+      transition: background-color 0.2s ease;
+    }
+    .info-cell:hover { background-color: var(--el-fill-color); }
+    .info-cell--full { grid-column: 1 / -1; }
+    .info-cell--inline { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+    .info-cell--inline .info-cell__label { margin-bottom: 0; flex-shrink: 0; }
+    .info-cell--inline .info-cell__value { font-size: 14px; }
+    .info-cell__label { margin-bottom: 4px; color: var(--el-text-color-secondary); font-size: 12px; }
+    .info-cell__value { color: var(--el-text-color-primary); font-size: 14px; font-weight: 500; line-height: 1.5; word-break: break-all; }
+    .database-name-tag { margin-right: 6px; }
+    .database-name-tag:last-child { margin-right: 0; }
+    .op-cell { display: inline-flex; align-items: center; }
+    .op-cell .el-button { padding: 0 3px; margin-left: 0; }
+    .op-cell .el-button + .el-button { margin-left: 0; }
+    .op-cell .el-button .el-icon { margin-right: 3px; }
+    .op-cell .el-button .el-icon--right { margin-right: 0; margin-left: 2px; }
+    .op-cell .el-divider--vertical { margin: 0 4px; height: 12px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="page-header">
+    <span class="page-header__title">数据库代理 · 数据源管理</span>
+    <span class="page-header__meta">配置来源: {{ sourceKind }}</span>
+  </div>
+
+  <!-- 类型数量卡片 -->
+  <div class="type-cards">
+    <div v-for="card in typeCards" :key="card.key" class="type-card"
+         :class="{ 'is-active': query.databaseType === card.value }"
+         :style="{ '--card-color': card.color, '--card-bg': card.bg }"
+         @click="onTypeCardClick(card.value)">
+      <span class="type-card__label">{{ card.label }}</span>
+      <span class="type-card__count">{{ typeCountOf(card.value) }}</span>
+    </div>
+  </div>
+
+  <!-- 搜索区 -->
+  <el-card class="page-search" shadow="never">
+    <el-form :inline="true" :model="query" @submit.prevent>
+      <el-form-item label="实例别名">
+        <el-input v-model="query.alias" placeholder="实例别名" clearable style="width: 180px"
+                  @input="scheduleQuery" @clear="onSearch" @keyup.enter="onSearch"></el-input>
+      </el-form-item>
+      <el-form-item label="数据库名">
+        <el-input v-model="query.databaseName" placeholder="数据库名" clearable style="width: 180px"
+                  @input="scheduleQuery" @clear="onSearch" @keyup.enter="onSearch"></el-input>
+      </el-form-item>
+      <el-form-item label="实例类型">
+        <el-select v-model="query.databaseType" placeholder="全部" clearable style="width: 150px" @change="onSearch">
+          <el-option v-for="t in typeOptions" :key="t.value" :label="t.label" :value="t.value"></el-option>
+        </el-select>
+      </el-form-item>
+      <el-form-item label="状态">
+        <el-select v-model="query.status" placeholder="全部" clearable style="width: 120px" @change="onSearch">
+          <el-option label="启用" :value="1"></el-option>
+          <el-option label="禁用" :value="0"></el-option>
+        </el-select>
+      </el-form-item>
+      <el-form-item>
+        <el-button type="primary" @click="onSearch">搜索</el-button>
+        <el-button @click="onReset">重置</el-button>
+      </el-form-item>
+    </el-form>
+  </el-card>
+
+  <!-- 列表 -->
+  <el-card shadow="never">
+    <div class="page-toolbar">
+      <div class="page-toolbar__left">
+        <el-button type="success" @click="openForm()">新增</el-button>
+        <el-button type="danger" :disabled="selected.length === 0" @click="onBatchDelete">删除</el-button>
+        <el-button type="warning" plain :loading="reloadLoading" @click="onReload">重载配置</el-button>
+      </div>
+      <div class="page-toolbar__right">
+        <el-popover placement="bottom-end" :width="220" trigger="click">
+          <template #reference>
+            <el-button>列设置</el-button>
+          </template>
+          <div class="col-checks">
+            <el-checkbox v-for="col in allColumns" :key="col.prop" :model-value="visibleProps.includes(col.prop)"
+                         @change="checked => toggleColumn(col.prop, checked)">{{ col.label }}</el-checkbox>
+          </div>
+        </el-popover>
+      </div>
+    </div>
+
+    <el-table :data="list" v-loading="loading" border row-key="configId"
+              @selection-change="rows => selected = rows" empty-text="暂无数据">
+      <el-table-column type="selection" width="48" fixed="left"></el-table-column>
+      <el-table-column v-for="col in visibleColumns" :key="col.prop" :prop="col.prop" :label="col.label"
+                       :width="col.width" :min-width="col.minWidth" :show-overflow-tooltip="col.tooltip">
+        <template #default="scope">
+          <el-tag v-if="col.prop === 'databaseType'" size="small"
+                  :color="typeColorOf(scope.row.databaseType) + '1f'"
+                  :style="{ color: typeColorOf(scope.row.databaseType), borderColor: typeColorOf(scope.row.databaseType) + '55' }">
+            {{ scope.row.databaseTypeDesc }}
+          </el-tag>
+          <span v-else-if="col.prop === 'databaseName'">{{ (scope.row.databases || []).join(",") }}</span>
+          <el-switch v-else-if="col.prop === 'status'"
+                     :model-value="scope.row.status" :active-value="1" :inactive-value="0"
+                     active-text="启用" inactive-text="禁用" inline-prompt
+                     :loading="statusLoading[scope.row.configId]"
+                     style="--el-switch-on-color: var(--el-color-success); --el-switch-off-color: var(--el-color-danger);"
+                     @change="val => onStatusChange(scope.row, val)"></el-switch>
+          <span v-else>{{ formatCell(scope.row, col.prop) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="196" align="center" fixed="right">
+        <template #default="scope">
+          <div class="op-cell">
+            <el-button type="primary" size="small" link @click="openDetail(scope.row)">
+              <el-icon><view></view></el-icon><span>详情</span>
+            </el-button>
+            <el-divider direction="vertical"></el-divider>
+            <el-button type="primary" size="small" link @click="openForm(scope.row)">
+              <el-icon><edit></edit></el-icon><span>修改</span>
+            </el-button>
+            <el-divider direction="vertical"></el-divider>
+            <el-dropdown trigger="click" @command="cmd => onCommand(cmd, scope.row)">
+              <el-button type="primary" size="small" link>
+                <el-icon><more></more></el-icon><span>更多</span><el-icon class="el-icon--right"><arrow-down></arrow-down></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="copy">再次新增</el-dropdown-item>
+                  <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
+        </template>
+      </el-table-column>
+    </el-table>
+
+    <el-pagination v-if="total > 0" style="margin-top: 14px; justify-content: flex-end;"
+                   :total="total" :current-page="query.pageNum" :page-size="query.pageSize"
+                   :page-sizes="[10, 20, 50, 100]" layout="total, sizes, prev, pager, next, jumper"
+                   @current-change="onPageChange" @size-change="onSizeChange"></el-pagination>
+  </el-card>
+
+  <!-- 表单弹窗 -->
+  <el-dialog v-model="formVisible" :title="formTitle" width="820px" destroy-on-close>
+    <el-form :model="form" label-width="150px">
+      <el-row :gutter="16">
+        <el-col :span="12">
+          <el-form-item label="实例别名"><el-input v-model="form.alias" placeholder="唯一标识"></el-input></el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="实例类型">
+            <el-select v-model="form.databaseType" style="width: 100%" @change="onTypeChange">
+              <el-option v-for="t in typeOptions" :key="t.value" :label="t.label" :value="t.value"></el-option>
+            </el-select>
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="实例地址"><el-input v-model="form.host" :placeholder="form.databaseType === 8 ? '数据库文件的绝对路径, 如 /data/app.db' : '实例地址'"></el-input></el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="实例端口"><el-input-number v-model="form.port" :min="1" :max="65535" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="实例用户名"><el-input v-model="form.username"></el-input></el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="实例密码"><el-input v-model="form.password" type="password" show-password
+              :placeholder="form.configId ? '留空表示保留原密码' : '不填则存为空密码'"></el-input></el-form-item>
+        </el-col>
+        <el-col :span="24">
+          <el-form-item label="所辖数据库"><el-input v-model="form.databaseName" :placeholder="form.databaseType === 8 ? '建议填 main, 实际由实例地址的文件路径决定' : (form.databaseType === 10 ? '逻辑库编号, 多个用英文逗号分隔, 常用 0' : '多个数据库用英文逗号分隔')"></el-input></el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="驱动类"><el-input v-model="form.driverClass" placeholder="如 com.mysql.cj.jdbc.Driver"></el-input></el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="实例版本"><el-input v-model="form.databaseVersion" placeholder="仅展示, 如 8.0.36"></el-input></el-form-item>
+        </el-col>
+        <el-col :span="24">
+          <el-form-item label="连接属性"><el-input v-model="form.connectionProperties" placeholder="按 key=value&amp;key=value 填写"></el-input></el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="最小空闲连接数"><el-input-number v-model="form.poolMinimumIdle" :min="0" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="最大连接数"><el-input-number v-model="form.poolMaximumPoolSize" :min="1" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="连接超时毫秒"><el-input-number v-model="form.poolConnectionTimeout" :min="0" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="空闲超时毫秒"><el-input-number v-model="form.poolIdleTimeout" :min="0" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="最大存活毫秒"><el-input-number v-model="form.poolMaxLifetime" :min="0" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="校验超时毫秒"><el-input-number v-model="form.poolValidationTimeout" :min="0" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="状态">
+            <el-radio-group v-model="form.status">
+              <el-radio :value="1">启用</el-radio>
+              <el-radio :value="0">禁用</el-radio>
+            </el-radio-group>
+          </el-form-item>
+        </el-col>
+        <el-col :span="24">
+          <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2"></el-input></el-form-item>
+        </el-col>
+      </el-row>
+    </el-form>
+    <template #footer>
+      <el-button @click="formVisible = false">取消</el-button>
+      <el-button type="primary" :loading="saving" @click="onSave">保存</el-button>
+    </template>
+  </el-dialog>
+
+  <!-- 详情弹窗 -->
+  <el-dialog v-model="detailVisible" title="配置详情" width="860px" top="8vh">
+    <div v-if="detail" class="crud-detail-scroll">
+      <!-- 基本信息 -->
+      <section class="detail-section">
+        <h4 class="detail-section__title">基本信息</h4>
+        <div class="detail-section__grid">
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">配置ID:</span>
+            <span class="info-cell__value">{{ detail.configId }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">实例别名:</span>
+            <span class="info-cell__value">{{ detail.alias }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">数据库名:</span>
+            <span class="info-cell__value">
+              <el-tag v-for="name in detail.databases" :key="name" size="small" class="database-name-tag">
+                {{ name }}
+              </el-tag>
+            </span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">实例类型:</span>
+            <span class="info-cell__value">{{ detail.databaseTypeDesc }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">实例版本:</span>
+            <span class="info-cell__value">{{ detail.databaseVersion }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">实例地址:</span>
+            <span class="info-cell__value">{{ detail.host }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">实例端口:</span>
+            <span class="info-cell__value">{{ detail.port }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">实例用户名:</span>
+            <span class="info-cell__value">{{ detail.username }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">实例密码:</span>
+            <span class="info-cell__value">{{ detail.passwordSet ? "******" : "" }}</span>
+          </div>
+          <div class="info-cell info-cell--inline info-cell--full">
+            <span class="info-cell__label">实例驱动类:</span>
+            <span class="info-cell__value">{{ detail.driverClass }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">状态:</span>
+            <span class="info-cell__value">
+              <el-tag v-if="detail.status === 1" type="success" size="small">启用</el-tag>
+              <el-tag v-else type="danger" size="small">禁用</el-tag>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 其他信息 -->
+      <section class="detail-section">
+        <h4 class="detail-section__title">其他信息</h4>
+        <div class="detail-section__grid">
+          <div class="info-cell info-cell--inline info-cell--full">
+            <span class="info-cell__label">额外连接属性:</span>
+            <span class="info-cell__value">{{ detail.connectionProperties }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">最小空闲连接数:</span>
+            <span class="info-cell__value">{{ detail.poolMinimumIdle }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">最大连接数:</span>
+            <span class="info-cell__value">{{ detail.poolMaximumPoolSize }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">连接超时时间(毫秒):</span>
+            <span class="info-cell__value">{{ detail.poolConnectionTimeout }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">空闲连接超时时间(毫秒):</span>
+            <span class="info-cell__value">{{ detail.poolIdleTimeout }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">连接最大存活时间(毫秒):</span>
+            <span class="info-cell__value">{{ detail.poolMaxLifetime }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">连接有效性校验超时时间(毫秒):</span>
+            <span class="info-cell__value">{{ detail.poolValidationTimeout }}</span>
+          </div>
+          <div class="info-cell info-cell--inline info-cell--full">
+            <span class="info-cell__label">备注:</span>
+            <span class="info-cell__value">{{ detail.remark }}</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 审计信息 -->
+      <section class="detail-section">
+        <h4 class="detail-section__title">审计信息</h4>
+        <div class="detail-section__grid">
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">创建人名称:</span>
+            <span class="info-cell__value">{{ detail.createByName }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">创建人类型:</span>
+            <span class="info-cell__value">{{ detail.createByType }}</span>
+          </div>
+          <div class="info-cell info-cell--inline info-cell--full">
+            <span class="info-cell__label">创建时间:</span>
+            <span class="info-cell__value">{{ detail.createTime }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">修改人名称:</span>
+            <span class="info-cell__value">{{ detail.updateByName }}</span>
+          </div>
+          <div class="info-cell info-cell--inline">
+            <span class="info-cell__label">修改人类型:</span>
+            <span class="info-cell__value">{{ detail.updateByType }}</span>
+          </div>
+          <div class="info-cell info-cell--inline info-cell--full">
+            <span class="info-cell__label">修改时间:</span>
+            <span class="info-cell__value">{{ detail.updateTime }}</span>
+          </div>
+        </div>
+      </section>
+    </div>
+    <template #footer>
+      <el-button @click="detailVisible = false">关闭</el-button>
+    </template>
+  </el-dialog>
+</div>
+
+<script src="/admin/assets/vue.global.prod.js"></script>
+<script src="/admin/assets/element-plus.full.min.js"></script>
+<script src="/admin/assets/element-plus-zh-cn.min.js"></script>
+<script src="/admin/assets/element-plus-icons.iife.min.js"></script>
+<script>
+const { createApp, ref, reactive, computed, onMounted } = Vue;
+const { ElMessage, ElMessageBox } = ElementPlus;
+
+// 实例类型选项与标签色, 与配置表的 database_type 取值一致
+const TYPE_OPTIONS = [
+  { label: "MySQL", value: 0 },
+  { label: "Kingbase8", value: 1 },
+  { label: "PostgreSQL", value: 2 },
+  { label: "SQLServer", value: 4 },
+  { label: "MariaDB", value: 5 },
+  { label: "TiDB", value: 6 },
+  { label: "OceanBase", value: 7 },
+  { label: "SQLite", value: 8 },
+  { label: "MongoDB", value: 9 },
+  { label: "Redis", value: 10 }
+];
+// 按类型值取色, 用对象而不是数组, 免得类型号不连续时颜色错位
+const TYPE_COLORS = {
+  0: "#409eff", 1: "#f56c6c", 2: "#67c23a", 4: "#909399",
+  5: "#13c2c2", 6: "#722ed1", 7: "#eb2f96", 8: "#2f54eb", 9: "#fa8c16",
+  10: "#c41d7f"
+};
+// 各类型的驱动类与默认端口, 切换类型时自动带出
+const TYPE_DEFAULTS = {
+  0: { driverClass: "com.mysql.cj.jdbc.Driver", port: 3306 },
+  1: { driverClass: "com.kingbase8.Driver", port: 54321 },
+  2: { driverClass: "org.postgresql.Driver", port: 5432 },
+  4: { driverClass: "com.microsoft.sqlserver.jdbc.SQLServerDriver", port: 1433 },
+  5: { driverClass: "org.mariadb.jdbc.Driver", port: 3306 },
+  6: { driverClass: "com.mysql.cj.jdbc.Driver", port: 4000 },
+  7: { driverClass: "com.oceanbase.jdbc.Driver", port: 2881 },
+  8: { driverClass: "" },
+  9: { driverClass: "", port: 27017 },
+  10: { driverClass: "", port: 6379 }
+};
+
+// 全部可选列,顺序即默认展示顺序
+const ALL_COLUMNS = [
+  { prop: "configId", label: "配置ID", width: 85 },
+  { prop: "databaseType", label: "实例类型", width: 110 },
+  { prop: "alias", label: "实例别名", minWidth: 200, tooltip: true },
+  { prop: "databaseName", label: "数据库名", minWidth: 200, tooltip: true },
+  { prop: "host", label: "实例地址", minWidth: 160, tooltip: true },
+  { prop: "port", label: "实例端口", width: 90 },
+  { prop: "username", label: "实例用户名", width: 130, tooltip: true },
+  { prop: "status", label: "状态", width: 100 },
+  { prop: "driverClass", label: "实例驱动类", width: 230, tooltip: true },
+  { prop: "databaseVersion", label: "实例版本", width: 100, tooltip: true },
+  { prop: "poolMinimumIdle", label: "最小空闲连接数", width: 130 },
+  { prop: "poolMaximumPoolSize", label: "最大连接数", width: 130 }
+];
+const COLUMN_STORAGE_KEY = "database-mcp-go-admin-columns";
+const DEFAULT_VISIBLE = ["configId", "databaseType", "alias", "databaseName", "host", "port", "username", "status"];
+
+// 统一请求: 非 200 业务码直接抛错,由调用方提示
+async function request(url, options) {
+  const resp = await fetch(url, options);
+  if (!resp.ok) {
+    throw new Error("HTTP " + resp.status);
+  }
+  const body = await resp.json();
+  if (body.code !== 200) {
+    throw new Error(body.message || "请求失败");
+  }
+  return body.data;
+}
+
+function postJSON(url, payload) {
+  return request(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+}
+
+const app = createApp({
+  setup() {
+    const sourceKind = ref("");
+    const typeOptions = TYPE_OPTIONS;
+    const query = reactive({ alias: "", databaseName: "", databaseType: undefined, status: undefined, pageNum: 1, pageSize: 10 });
+    const list = ref([]);
+    const total = ref(0);
+    const loading = ref(false);
+    const selected = ref([]);
+    const statusLoading = reactive({});
+    const reloadLoading = ref(false);
+    const typeCount = reactive({ totalCount: 0, countMap: {} });
+
+    const allColumns = ALL_COLUMNS;
+    const visibleProps = ref(loadVisibleColumns());
+    const visibleColumns = computed(() => ALL_COLUMNS.filter(col => visibleProps.value.includes(col.prop)));
+
+    const typeCards = computed(() => [
+      { key: "total", label: "总配置", value: undefined, color: "#409eff", bg: "#ecf5ff" },
+      ...TYPE_OPTIONS.map(t => ({
+        key: String(t.value), label: t.label, value: t.value,
+        color: TYPE_COLORS[t.value], bg: TYPE_COLORS[t.value] + "14"
+      }))
+    ]);
+
+    // 列设置持久化到浏览器本地
+    function loadVisibleColumns() {
+      const known = new Set(ALL_COLUMNS.map(c => c.prop));
+      try {
+        const raw = localStorage.getItem(COLUMN_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            // 过滤掉已下线或未知的列,兼容老版本存在本地的列设置
+            const kept = ALL_COLUMNS.filter(c => parsed.includes(c.prop)).map(c => c.prop);
+            if (kept.length > 0) return kept;
+          }
+        }
+      } catch (e) { /* 忽略损坏的本地配置 */ }
+      return ALL_COLUMNS.filter(c => DEFAULT_VISIBLE.includes(c.prop) && known.has(c.prop)).map(c => c.prop);
+    }
+    function toggleColumn(prop, checked) {
+      const current = new Set(visibleProps.value);
+      if (checked) current.add(prop); else current.delete(prop);
+      visibleProps.value = ALL_COLUMNS.filter(c => current.has(c.prop)).map(c => c.prop);
+      localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(visibleProps.value));
+    }
+
+    // 类型标签取与类型卡片同一张色表, 未知类型退回主题蓝
+    function typeColorOf(code) {
+      return TYPE_COLORS[code] || "#409eff";
+    }
+    function typeCountOf(value) {
+      if (value === undefined || value === null) return typeCount.totalCount;
+      return typeCount.countMap[value] || 0;
+    }
+    function formatCell(row, prop) {
+      const v = row[prop];
+      if (v === null || v === undefined) return "";
+      return v;
+    }
+
+    let listSeq = 0;
+    async function loadList() {
+      const seq = ++listSeq;
+      loading.value = true;
+      try {
+        const params = new URLSearchParams({
+          alias: query.alias || "",
+          databaseName: query.databaseName || "",
+          pageNum: String(query.pageNum),
+          pageSize: String(query.pageSize)
+        });
+        if (query.databaseType !== undefined && query.databaseType !== null && query.databaseType !== "") params.set("databaseType", String(query.databaseType));
+        if (query.status !== undefined && query.status !== null && query.status !== "") params.set("status", String(query.status));
+        const data = await request("/admin/api/list?" + params.toString());
+        // 连续点击筛选时只认最后一次请求的结果,避免旧响应覆盖新结果
+        if (seq !== listSeq) return;
+        list.value = data.list || [];
+        total.value = data.total || 0;
+      } catch (e) {
+        if (seq === listSeq) ElMessage.error("查询失败: " + e.message);
+      } finally {
+        if (seq === listSeq) loading.value = false;
+      }
+    }
+
+    async function loadTypeCount() {
+      try {
+        const data = await request("/admin/api/type-count");
+        const map = {};
+        for (const item of data.items || []) map[item.databaseType] = item.configCount;
+        typeCount.totalCount = data.totalCount || 0;
+        Object.assign(typeCount.countMap, {});
+        typeCount.countMap = map;
+      } catch (e) { /* 统计失败不打断主流程 */ }
+    }
+
+    let timer = null;
+    function cancelSchedule() {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    }
+    function scheduleQuery() {
+      cancelSchedule();
+      timer = setTimeout(() => { query.pageNum = 1; loadList(); }, 400);
+    }
+    function onSearch() {
+      cancelSchedule();
+      query.pageNum = 1;
+      loadList();
+      loadTypeCount();
+    }
+    function onReset() {
+      cancelSchedule();
+      query.alias = "";
+      query.databaseName = "";
+      query.databaseType = undefined;
+      query.status = undefined;
+      query.pageNum = 1;
+      loadList();
+      loadTypeCount();
+    }
+    function onTypeCardClick(value) {
+      cancelSchedule();
+      query.alias = "";
+      query.databaseName = "";
+      query.status = undefined;
+      query.databaseType = value;
+      query.pageNum = 1;
+      loadList();
+      loadTypeCount();
+    }
+    function onPageChange(page) { query.pageNum = page; loadList(); }
+    function onSizeChange(size) { query.pageSize = size; query.pageNum = 1; loadList(); }
+
+    async function onStatusChange(row, val) {
+      const target = Number(val);
+      if (statusLoading[row.configId]) return;
+      statusLoading[row.configId] = true;
+      try {
+        await postJSON("/admin/api/status", { configId: row.configId, status: target });
+        row.status = target;
+        ElMessage.success(target === 1 ? "已启用" : "已禁用");
+        loadTypeCount();
+      } catch (e) {
+        ElMessage.error("状态修改失败: " + e.message);
+        loadList();
+      } finally {
+        statusLoading[row.configId] = false;
+      }
+    }
+
+    async function onBatchDelete() {
+      if (selected.value.length === 0) {
+        ElMessage.warning("请勾选要删除的配置");
+        return;
+      }
+      try {
+        await ElMessageBox.confirm("确认删除选中的 " + selected.value.length + " 条配置？", "警告", { type: "warning" });
+      } catch (e) { return; }
+      try {
+        const ids = selected.value.map(row => row.configId);
+        await postJSON("/admin/api/batch-delete", { configIds: ids });
+        ElMessage.success("删除成功");
+        selected.value = [];
+        loadList();
+        loadTypeCount();
+      } catch (e) {
+        ElMessage.error("删除失败: " + e.message);
+      }
+    }
+
+    async function onDeleteRow(row) {
+      try {
+        await ElMessageBox.confirm("确认删除配置 " + row.alias + " ？", "警告", { type: "warning" });
+      } catch (e) { return; }
+      try {
+        await postJSON("/admin/api/batch-delete", { configIds: [row.configId] });
+        ElMessage.success("删除成功");
+        loadList();
+        loadTypeCount();
+      } catch (e) {
+        ElMessage.error("删除失败: " + e.message);
+      }
+    }
+
+    async function onReload() {
+      try {
+        await ElMessageBox.confirm("确认重载 MCP 服务数据库连接配置？", "提示", { type: "warning" });
+      } catch (e) { return; }
+      reloadLoading.value = true;
+      try {
+        const count = await postJSON("/admin/api/reload", {});
+        ElMessage.success("重载成功, 当前启用配置 " + count + " 条");
+      } catch (e) {
+        ElMessage.error("重载失败: " + e.message);
+      } finally {
+        reloadLoading.value = false;
+      }
+    }
+
+    // ==================== 表单弹窗 ====================
+    const formVisible = ref(false);
+    const formTitle = ref("新增数据源");
+    const saving = ref(false);
+    const form = reactive(emptyForm());
+    let editingId = 0;
+
+    function emptyForm() {
+      return {
+        configId: 0, alias: "", databaseType: 0, host: "", port: 3306, username: "", password: "",
+        databaseName: "", driverClass: "com.mysql.cj.jdbc.Driver", databaseVersion: "",
+        connectionProperties: "", poolMinimumIdle: 2, poolMaximumPoolSize: 10,
+        poolConnectionTimeout: 5000, poolIdleTimeout: 600000, poolMaxLifetime: 1800000,
+        poolValidationTimeout: 3000, status: 1, remark: ""
+      };
+    }
+
+    async function openForm(row, copy) {
+      editingId = row && !copy ? row.configId : 0;
+      formTitle.value = row && !copy ? "编辑数据源" : "新增数据源";
+      Object.assign(form, emptyForm());
+      if (row) {
+        Object.assign(form, {
+          configId: copy ? 0 : row.configId,
+          alias: copy ? row.alias + "_copy" : row.alias,
+          databaseType: row.databaseType,
+          host: row.host,
+          port: row.port,
+          username: row.username,
+          password: "",
+          databaseName: (row.databases || []).join(","),
+          driverClass: row.driverClass,
+          databaseVersion: row.databaseVersion,
+          connectionProperties: row.connectionProperties,
+          poolMinimumIdle: row.poolMinimumIdle,
+          poolMaximumPoolSize: row.poolMaximumPoolSize,
+          status: row.status,
+          remark: row.remark
+        });
+        // 连接池完整参数由详情接口补齐,先取到再开弹窗;取不到就中止,避免用默认值把真实参数覆盖掉
+        const filled = await fillPoolFromDetail(row.configId);
+        if (!filled) {
+          ElMessage.error("读取配置详情失败, 请稍后重试");
+          return;
+        }
+      }
+      formVisible.value = true;
+    }
+
+    async function fillPoolFromDetail(id) {
+      try {
+        const detail = await request("/admin/api/detail?id=" + id);
+        form.poolConnectionTimeout = detail.poolConnectionTimeout;
+        form.poolIdleTimeout = detail.poolIdleTimeout;
+        form.poolMaxLifetime = detail.poolMaxLifetime;
+        form.poolValidationTimeout = detail.poolValidationTimeout;
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function onTypeChange(value) {
+      const def = TYPE_DEFAULTS[value] || {};
+      form.driverClass = def.driverClass || "";
+      // 只有当前端口还是别的类型的默认值时才跟着换, 手填过的端口不动
+      const knownPorts = [3306, 5432, 54321, 1433, 4000, 2881, 27017, 6379];
+      if (def.port && knownPorts.includes(form.port)) form.port = def.port;
+    }
+
+    async function onSave() {
+      const isSqlite = form.databaseType === 8;
+      const noAccount = form.databaseType === 8 || form.databaseType === 9 || form.databaseType === 10;
+      if (!form.alias) { ElMessage.warning("实例别名不能为空"); return; }
+      if (!form.host) { ElMessage.warning(isSqlite ? "实例地址须填数据库文件的绝对路径" : "实例地址不能为空"); return; }
+      if (!noAccount && !form.username) { ElMessage.warning("实例用户名不能为空"); return; }
+      if (!form.databaseName) { ElMessage.warning("数据库名不能为空"); return; }
+      if (!noAccount && !form.driverClass) { ElMessage.warning("驱动类不能为空"); return; }
+      const payload = { ...form };
+      delete payload.configId;
+      saving.value = true;
+      try {
+        if (editingId > 0) {
+          await postJSON("/admin/api/update", { configId: editingId, ...payload });
+          ElMessage.success("修改成功");
+        } else {
+          await postJSON("/admin/api/create", payload);
+          ElMessage.success("新增成功");
+        }
+        formVisible.value = false;
+        loadList();
+        loadTypeCount();
+      } catch (e) {
+        ElMessage.error("保存失败: " + e.message);
+      } finally {
+        saving.value = false;
+      }
+    }
+
+    // ==================== 详情弹窗 ====================
+    const detailVisible = ref(false);
+    const detail = ref(null);
+
+    async function openDetail(row) {
+      try {
+        detail.value = await request("/admin/api/detail?id=" + row.configId);
+        detailVisible.value = true;
+      } catch (e) {
+        ElMessage.error("查询详情失败: " + e.message);
+      }
+    }
+
+    function onCommand(cmd, row) {
+      if (cmd === "delete") onDeleteRow(row);
+      if (cmd === "copy") openForm(row, true);
+    }
+
+    async function loadMeta() {
+      try {
+        const data = await request("/admin/api/meta");
+        sourceKind.value = data.sourceKind || "";
+      } catch (e) { /* 元信息缺失不影响使用 */ }
+    }
+
+    onMounted(() => {
+      loadMeta();
+      loadList();
+      loadTypeCount();
+    });
+
+    return {
+      sourceKind, typeOptions, typeCards, query, list, total, loading, selected, statusLoading, reloadLoading,
+      typeCount, allColumns, visibleProps, visibleColumns,
+      typeColorOf, typeCountOf, formatCell, scheduleQuery, onSearch, onReset, onTypeCardClick, onPageChange, onSizeChange,
+      onStatusChange, onBatchDelete, onReload, toggleColumn,
+      formVisible, formTitle, form, saving, openForm, onTypeChange, onSave,
+      detailVisible, detail, openDetail, onCommand
+    };
+  }
+});
+
+app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+Object.entries(ElementPlusIconsVue || {}).forEach(([key, component]) => app.component(key, component));
+app.mount("#app");
+</script>
+</body>
+</html>

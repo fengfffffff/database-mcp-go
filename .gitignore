@@ -1,0 +1,15 @@
+### 构建产物 ###
+build/
+*.exe
+*.test
+vendor/
+/database-mcp-go
+
+### 运行期数据 ###
+logs/
+data/
+
+### 编辑器与系统 ###
+.idea/
+.vscode/
+.DS_Store
