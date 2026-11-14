@@ -35,6 +35,5 @@ log:
   sql: true # 是否记录执行的 SQL 语句, 默认开启, 内容截断到 500 字; 担心敏感数据落盘可设为 false
 
 admin:
-  enabled: false # 管理页默认关闭, 启用前先配好用户名与密码
-  username: "" # 填了账号密码则管理页启用基础认证
-  password: ""
+  username: "" # 管理页账号, 必填, 不能含冒号, 留空启动失败
+  password: "" # 管理页密码, 必填, 留空启动失败

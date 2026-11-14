@@ -63,11 +63,17 @@ server:
 mcp:
   auth_token: "change-me"
 
+admin:
+  username: "admin"
+  password: "${ADMIN_PASSWORD}"
+
 source:
   type: file
   file:
     path: datasources.json
 ```
+
+`admin.username` 与 `admin.password` 必填, 账号或密码为空时启动直接失败; 上例用环境变量注入密码, 启动前先设置 `ADMIN_PASSWORD`.
 
 ### (3)、准备数据源
 
@@ -100,7 +106,7 @@ file 模式编辑 `datasources.json`, 其余字段见第三章 file 模式一节
 curl http://127.0.0.1:47319/healthz
 ```
 
-管理页设 `admin.enabled: true` 后访问 `http://127.0.0.1:47319/admin`, 支持类型统计、四条件筛选、分页、批量删除、状态开关、详情、列设置与重载.
+启动前先填好 `config.yaml` 里的 `admin.username` 与 `admin.password`, 或用 `${ADMIN_PASSWORD}` 从环境变量注入密码, 缺一项进程会直接退出. 管理页始终开启, 访问 `http://127.0.0.1:47319/admin`, 支持类型统计、四条件筛选、分页、批量删除、状态开关、详情、列设置与重载.
 
 ### (5)、接入 MCP 客户端
 
@@ -125,7 +131,7 @@ curl http://127.0.0.1:47319/healthz
 | 端点 | 说明 |
 |------|------|
 | `/mcp` | MCP 端点, 路径可配, 配置 token 后需 Bearer Token |
-| `/admin` | 内嵌管理页, 需 `admin.enabled` 开启 |
+| `/admin` | 内嵌管理页, 始终开启, 需基础认证 |
 | `/healthz` | 健康检查 |
 
 配置刷新只在配置被服务外部改过时使用, 规则见第三章(3).
@@ -175,9 +181,10 @@ curl http://127.0.0.1:47319/healthz
 | `log.retain_days` | 14 | 保留天数, 超期文件自动清理 |
 | `log.console` | false | 是否同时输出到控制台 |
 | `log.sql` | true | 是否记录执行语句, 截断到 500 字 |
-| `admin.enabled` | false | 是否启用管理页 |
-| `admin.username` | 空 | 非空即启用基础认证 |
-| `admin.password` | 空 | 基础认证密码, 账号非空而密码留空等于空密码登录 |
+| `admin.username` | 无默认值 | 基础认证账号, 必填, 不能包含冒号 |
+| `admin.password` | 无默认值 | 基础认证密码, 必填 |
+
+旧版的 `admin.enabled` 已移除, 配置里保留该键也不会生效; 管理页始终开启, 只由账号密码控制访问.
 
 ### (5)、连接属性
 
@@ -375,7 +382,7 @@ SQL 执行失败 - 错误类别: 表不存在, 错误码: 1146, SQLSTATE: 42S02,
 ## 六、安全
 
 1. `auth_token` 留空表示不校验, 只适合本机回环; 服务离开本机必须配置 token.
-2. 管理页只有一组基础认证, 没有权限体系; 账号留空即不校验, 此时启动日志会告警, 只能靠本机与隧道隔离兜底.
+2. 管理页始终开启, 只有一组基础认证, 没有权限体系; 必须配置账号与密码, 缺一项启动即失败, 不存在无认证放行. 基础认证走明文 HTTP, 跨机访问请套 HTTPS 或 SSH 隧道.
 3. file 模式的密码是明文, 注意文件权限; 要求密文存储时选 mysql 模式.
 4. `log.sql` 会把语句写入日志, 敏感场景设为 false.
 5. 代理层不做业务语义过滤, 只拦会破坏连接的协议级命令; 能执行什么由数据库账号权限决定, 建议为每个数据源配置只读或受限账号.

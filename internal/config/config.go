@@ -81,7 +81,6 @@ type LogConfig struct {
 
 // AdminConfig 内嵌管理页配置
 type AdminConfig struct {
-	Enabled  bool   `yaml:"enabled"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 }
@@ -187,6 +186,17 @@ func (c *Config) validate() error {
 	// 根路径会让 MCP 处理器吃掉所有未匹配的请求, 鉴权判断也失去可比的路径前缀, 直接禁止
 	if c.MCP.Endpoint == "/" {
 		return fmt.Errorf("mcp.endpoint 不能是根路径, 请填具体路径, 例如 /mcp")
+	}
+	// 管理页始终开启, 必须有完整账号密码, 否则等于把增删改接口裸奔在网络上
+	if strings.TrimSpace(c.Admin.Username) == "" {
+		return fmt.Errorf("admin.username 必填, 管理页必须配置账号与密码")
+	}
+	// Basic Auth 用首个冒号分隔账号与密码, 账号含冒号会导致永远认证失败
+	if strings.Contains(c.Admin.Username, ":") {
+		return fmt.Errorf("admin.username 不能包含冒号")
+	}
+	if strings.TrimSpace(c.Admin.Password) == "" {
+		return fmt.Errorf("admin.password 必填, 管理页必须配置账号与密码")
 	}
 	return nil
 }

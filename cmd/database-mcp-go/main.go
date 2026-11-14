@@ -65,9 +65,6 @@ func run() error {
 
 	logger.Info("database-mcp-go 启动中", "version", version, "port", cfg.Server.Port,
 		"source", cfg.Source.Type, "drivers", driver.Default().Supported())
-	if cfg.Admin.Enabled && cfg.Admin.Username == "" {
-		logger.Warn("管理页已启用但未配置账号, 当前无认证, 仅限本机与隧道访问", "path", "/admin")
-	}
 
 	// 数据源存储
 	source, err := newSource(cfg, logger)

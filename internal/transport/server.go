@@ -36,10 +36,8 @@ func NewHandler(cfg *config.Config, server *mcp.Server, proxy *service.Proxy, lo
 		mux.Handle(cfg.MCP.Endpoint+"/", authMCP)
 	}
 
-	// 内嵌管理页
-	if cfg.Admin.Enabled {
-		admin.Register(mux, proxy, cfg.Admin, logger)
-	}
+	// 内嵌管理页:始终注册, 由基础认证保护
+	admin.Register(mux, proxy, cfg.Admin, logger)
 
 	// 健康检查
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {

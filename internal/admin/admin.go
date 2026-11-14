@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/fengfffffff/database-mcp-go/internal/config"
 	"github.com/fengfffffff/database-mcp-go/internal/model"
@@ -48,12 +49,12 @@ func Register(mux *http.ServeMux, proxy *service.Proxy, cfg config.AdminConfig, 
 	api := &apiHandler{proxy: proxy, logger: logger}
 	mux.Handle("/admin/api/list", auth(http.HandlerFunc(api.list)))
 	mux.Handle("/admin/api/detail", auth(http.HandlerFunc(api.detail)))
-	mux.Handle("/admin/api/create", auth(http.HandlerFunc(api.create)))
-	mux.Handle("/admin/api/update", auth(http.HandlerFunc(api.update)))
-	mux.Handle("/admin/api/status", auth(http.HandlerFunc(api.status)))
-	mux.Handle("/admin/api/batch-delete", auth(http.HandlerFunc(api.batchDelete)))
+	mux.Handle("/admin/api/create", auth(requireJSON(http.HandlerFunc(api.create))))
+	mux.Handle("/admin/api/update", auth(requireJSON(http.HandlerFunc(api.update))))
+	mux.Handle("/admin/api/status", auth(requireJSON(http.HandlerFunc(api.status))))
+	mux.Handle("/admin/api/batch-delete", auth(requireJSON(http.HandlerFunc(api.batchDelete))))
 	mux.Handle("/admin/api/type-count", auth(http.HandlerFunc(api.typeCount)))
-	mux.Handle("/admin/api/reload", auth(http.HandlerFunc(api.reload)))
+	mux.Handle("/admin/api/reload", auth(requireJSON(http.HandlerFunc(api.reload))))
 	mux.Handle("/admin/api/meta", auth(http.HandlerFunc(api.meta)))
 	// 未匹配到的接口路径直接 404,避免被页面入口兜底成 HTML 让前端解析失败
 	mux.Handle("/admin/api/", auth(http.NotFoundHandler()))
@@ -244,16 +245,28 @@ func (h *apiHandler) meta(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, model.OK(map[string]string{"sourceKind": h.proxy.SourceKind()}))
 }
 
-// basicAuth 配置了账号密码时启用基础认证
+// requireJSON 写接口只接受 application/json, 拦截跨站表单与简单请求伪造
+func requireJSON(next http.Handler) http.Handler {
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			ct := strings.ToLower(r.Header.Get("Content-Type"))
+			if !strings.HasPrefix(ct, "application/json") {
+				writeJSON(w, http.StatusUnsupportedMediaType, model.Error(http.StatusUnsupportedMediaType, "Content-Type 必须为 application/json"))
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// basicAuth 管理页基础认证,账号或密码缺失时一律拒绝
 func basicAuth(cfg config.AdminConfig) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
-		if cfg.Username == "" {
-			return next
-		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user, pass, ok := r.BasicAuth()
-			if !ok || user != cfg.Username || pass != cfg.Password {
+			if cfg.Username == "" || cfg.Password == "" || !ok || user != cfg.Username || pass != cfg.Password {
 				w.Header().Set("WWW-Authenticate", `Basic realm="database-mcp-go admin"`)
 				http.Error(w, "未授权", http.StatusUnauthorized)
 				return
@@ -263,7 +276,7 @@ func basicAuth(cfg config.AdminConfig) func(http.Handler) http.Handler {
 	}
 }
 
-// operatorOf 从 basic auth 取管理页操作者身份, 未启用认证时按管理员记录
+// operatorOf 从 basic auth 取管理页操作者身份
 // 用户名按列宽截断, 避免超长账号名把审计列写超长导致新增失败
 func operatorOf(r *http.Request) model.Operator {
 
