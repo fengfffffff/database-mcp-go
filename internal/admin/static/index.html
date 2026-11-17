@@ -12,6 +12,7 @@
     .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
     .page-header__title { font-size: 16px; font-weight: 600; color: var(--el-text-color-primary); }
     .page-header__meta { font-size: 12px; color: var(--el-text-color-secondary); }
+    .page-header__right { display: flex; align-items: center; gap: 10px; }
     .type-cards { display: flex; gap: 10px; margin-bottom: 12px; }
     .type-card {
       flex: 1; min-width: 0; padding: 13px 16px; cursor: pointer; text-align: center;
@@ -66,9 +67,16 @@
 </head>
 <body>
 <div id="app">
+  <el-config-provider :locale="epLocale">
   <div class="page-header">
-    <span class="page-header__title">数据库代理 · 数据源管理</span>
-    <span class="page-header__meta">配置来源: {{ sourceKind }}</span>
+    <span class="page-header__title">{{ t("appTitle") }}</span>
+    <div class="page-header__right">
+      <span class="page-header__meta">{{ t("configSource") }}: {{ sourceKindText }}</span>
+      <el-radio-group v-model="lang" size="small">
+        <el-radio-button value="zh">中文</el-radio-button>
+        <el-radio-button value="en">English</el-radio-button>
+      </el-radio-group>
+    </div>
   </div>
 
   <!-- 类型数量卡片 -->
@@ -85,28 +93,28 @@
   <!-- 搜索区 -->
   <el-card class="page-search" shadow="never">
     <el-form :inline="true" :model="query" @submit.prevent>
-      <el-form-item label="实例别名">
-        <el-input v-model="query.alias" placeholder="实例别名" clearable style="width: 180px"
+      <el-form-item :label="t('alias')">
+        <el-input v-model="query.alias" :placeholder="t('alias')" clearable style="width: 180px"
                   @input="scheduleQuery" @clear="onSearch" @keyup.enter="onSearch"></el-input>
       </el-form-item>
-      <el-form-item label="数据库名">
-        <el-input v-model="query.databaseName" placeholder="数据库名" clearable style="width: 180px"
+      <el-form-item :label="t('databaseName')">
+        <el-input v-model="query.databaseName" :placeholder="t('databaseName')" clearable style="width: 180px"
                   @input="scheduleQuery" @clear="onSearch" @keyup.enter="onSearch"></el-input>
       </el-form-item>
-      <el-form-item label="实例类型">
-        <el-select v-model="query.databaseType" placeholder="全部" clearable style="width: 150px" @change="onSearch">
-          <el-option v-for="t in typeOptions" :key="t.value" :label="t.label" :value="t.value"></el-option>
+      <el-form-item :label="t('databaseType')">
+        <el-select v-model="query.databaseType" :placeholder="t('all')" clearable style="width: 150px" @change="onSearch">
+          <el-option v-for="type in typeOptions" :key="type.value" :label="type.label" :value="type.value"></el-option>
         </el-select>
       </el-form-item>
-      <el-form-item label="状态">
-        <el-select v-model="query.status" placeholder="全部" clearable style="width: 120px" @change="onSearch">
-          <el-option label="启用" :value="1"></el-option>
-          <el-option label="禁用" :value="0"></el-option>
+      <el-form-item :label="t('status')">
+        <el-select v-model="query.status" :placeholder="t('all')" clearable style="width: 120px" @change="onSearch">
+          <el-option :label="t('enabled')" :value="1"></el-option>
+          <el-option :label="t('disabled')" :value="0"></el-option>
         </el-select>
       </el-form-item>
       <el-form-item>
-        <el-button type="primary" @click="onSearch">搜索</el-button>
-        <el-button @click="onReset">重置</el-button>
+        <el-button type="primary" @click="onSearch">{{ t("search") }}</el-button>
+        <el-button @click="onReset">{{ t("reset") }}</el-button>
       </el-form-item>
     </el-form>
   </el-card>
@@ -115,14 +123,14 @@
   <el-card shadow="never">
     <div class="page-toolbar">
       <div class="page-toolbar__left">
-        <el-button type="success" @click="openForm()">新增</el-button>
-        <el-button type="danger" :disabled="selected.length === 0" @click="onBatchDelete">删除</el-button>
-        <el-button type="warning" plain :loading="reloadLoading" @click="onReload">重载配置</el-button>
+        <el-button type="success" @click="openForm()">{{ t("add") }}</el-button>
+        <el-button type="danger" :disabled="selected.length === 0" @click="onBatchDelete">{{ t("batchDelete") }}</el-button>
+        <el-button type="warning" plain :loading="reloadLoading" @click="onReload">{{ t("reloadConfig") }}</el-button>
       </div>
       <div class="page-toolbar__right">
         <el-popover placement="bottom-end" :width="220" trigger="click">
           <template #reference>
-            <el-button>列设置</el-button>
+            <el-button>{{ t("columnSettings") }}</el-button>
           </template>
           <div class="col-checks">
             <el-checkbox v-for="col in allColumns" :key="col.prop" :model-value="visibleProps.includes(col.prop)"
@@ -133,7 +141,7 @@
     </div>
 
     <el-table :data="list" v-loading="loading" border row-key="configId"
-              @selection-change="rows => selected = rows" empty-text="暂无数据">
+              @selection-change="rows => selected = rows" :empty-text="t('noData')">
       <el-table-column type="selection" width="48" fixed="left"></el-table-column>
       <el-table-column v-for="col in visibleColumns" :key="col.prop" :prop="col.prop" :label="col.label"
                        :width="col.width" :min-width="col.minWidth" :show-overflow-tooltip="col.tooltip">
@@ -146,32 +154,32 @@
           <span v-else-if="col.prop === 'databaseName'">{{ (scope.row.databases || []).join(",") }}</span>
           <el-switch v-else-if="col.prop === 'status'"
                      :model-value="scope.row.status" :active-value="1" :inactive-value="0"
-                     active-text="启用" inactive-text="禁用" inline-prompt
+                     :active-text="t('switchOn')" :inactive-text="t('switchOff')" inline-prompt
                      :loading="statusLoading[scope.row.configId]"
                      style="--el-switch-on-color: var(--el-color-success); --el-switch-off-color: var(--el-color-danger);"
                      @change="val => onStatusChange(scope.row, val)"></el-switch>
           <span v-else>{{ formatCell(scope.row, col.prop) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="196" align="center" fixed="right">
+      <el-table-column :label="t('operation')" width="196" align="center" fixed="right">
         <template #default="scope">
           <div class="op-cell">
             <el-button type="primary" size="small" link @click="openDetail(scope.row)">
-              <el-icon><view></view></el-icon><span>详情</span>
+              <el-icon><view></view></el-icon><span>{{ t("detail") }}</span>
             </el-button>
             <el-divider direction="vertical"></el-divider>
             <el-button type="primary" size="small" link @click="openForm(scope.row)">
-              <el-icon><edit></edit></el-icon><span>修改</span>
+              <el-icon><edit></edit></el-icon><span>{{ t("edit") }}</span>
             </el-button>
             <el-divider direction="vertical"></el-divider>
             <el-dropdown trigger="click" @command="cmd => onCommand(cmd, scope.row)">
               <el-button type="primary" size="small" link>
-                <el-icon><more></more></el-icon><span>更多</span><el-icon class="el-icon--right"><arrow-down></arrow-down></el-icon>
+                <el-icon><more></more></el-icon><span>{{ t("more") }}</span><el-icon class="el-icon--right"><arrow-down></arrow-down></el-icon>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="copy">再次新增</el-dropdown-item>
-                  <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                  <el-dropdown-item command="copy">{{ t("copyAsNew") }}</el-dropdown-item>
+                  <el-dropdown-item command="delete" divided>{{ t("batchDelete") }}</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -188,97 +196,97 @@
 
   <!-- 表单弹窗 -->
   <el-dialog v-model="formVisible" :title="formTitle" width="820px" destroy-on-close>
-    <el-form :model="form" label-width="150px">
+    <el-form :model="form" :label-width="lang === 'zh' ? '150px' : '185px'">
       <el-row :gutter="16">
         <el-col :span="12">
-          <el-form-item label="实例别名"><el-input v-model="form.alias" placeholder="唯一标识"></el-input></el-form-item>
+          <el-form-item :label="t('alias')"><el-input v-model="form.alias" :placeholder="t('uniqueIdPlaceholder')"></el-input></el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="实例类型">
+          <el-form-item :label="t('databaseType')">
             <el-select v-model="form.databaseType" style="width: 100%" @change="onTypeChange">
-              <el-option v-for="t in typeOptions" :key="t.value" :label="t.label" :value="t.value"></el-option>
+              <el-option v-for="type in typeOptions" :key="type.value" :label="type.label" :value="type.value"></el-option>
             </el-select>
           </el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="实例地址"><el-input v-model="form.host" :placeholder="form.databaseType === 8 ? '数据库文件的绝对路径, 如 /data/app.db' : '实例地址'"></el-input></el-form-item>
+          <el-form-item :label="t('host')"><el-input v-model="form.host" :placeholder="hostPlaceholder()"></el-input></el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="实例端口"><el-input-number v-model="form.port" :min="1" :max="65535" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
+          <el-form-item :label="t('port')"><el-input-number v-model="form.port" :min="1" :max="65535" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="实例用户名"><el-input v-model="form.username"></el-input></el-form-item>
+          <el-form-item :label="t('username')"><el-input v-model="form.username"></el-input></el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="实例密码"><el-input v-model="form.password" type="password" show-password
-              :placeholder="form.configId ? '留空表示保留原密码' : '不填则存为空密码'"></el-input></el-form-item>
+          <el-form-item :label="t('password')"><el-input v-model="form.password" type="password" show-password
+              :placeholder="passwordPlaceholder()"></el-input></el-form-item>
         </el-col>
         <el-col :span="24">
-          <el-form-item label="所辖数据库"><el-input v-model="form.databaseName" :placeholder="form.databaseType === 8 ? '建议填 main, 实际由实例地址的文件路径决定' : (form.databaseType === 10 ? '逻辑库编号, 多个用英文逗号分隔, 常用 0' : '多个数据库用英文逗号分隔')"></el-input></el-form-item>
+          <el-form-item :label="t('databases')"><el-input v-model="form.databaseName" :placeholder="databasesPlaceholder()"></el-input></el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="驱动类"><el-input v-model="form.driverClass" placeholder="如 com.mysql.cj.jdbc.Driver"></el-input></el-form-item>
+          <el-form-item :label="t('driverClass')"><el-input v-model="form.driverClass" :placeholder="t('driverClassPlaceholder')"></el-input></el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="实例版本"><el-input v-model="form.databaseVersion" placeholder="仅展示, 如 8.0.36"></el-input></el-form-item>
+          <el-form-item :label="t('databaseVersion')"><el-input v-model="form.databaseVersion" :placeholder="t('versionPlaceholder')"></el-input></el-form-item>
         </el-col>
         <el-col :span="24">
-          <el-form-item label="连接属性"><el-input v-model="form.connectionProperties" placeholder="按 key=value&amp;key=value 填写"></el-input></el-form-item>
+          <el-form-item :label="t('connectionProperties')"><el-input v-model="form.connectionProperties" :placeholder="t('connPropsPlaceholder')"></el-input></el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="最小空闲连接数"><el-input-number v-model="form.poolMinimumIdle" :min="0" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
+          <el-form-item :label="t('poolMinimumIdle')"><el-input-number v-model="form.poolMinimumIdle" :min="0" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="最大连接数"><el-input-number v-model="form.poolMaximumPoolSize" :min="1" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
+          <el-form-item :label="t('poolMaximumPoolSize')"><el-input-number v-model="form.poolMaximumPoolSize" :min="1" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="连接超时毫秒"><el-input-number v-model="form.poolConnectionTimeout" :min="0" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
+          <el-form-item :label="t('poolConnectionTimeout')"><el-input-number v-model="form.poolConnectionTimeout" :min="0" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="空闲超时毫秒"><el-input-number v-model="form.poolIdleTimeout" :min="0" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
+          <el-form-item :label="t('poolIdleTimeout')"><el-input-number v-model="form.poolIdleTimeout" :min="0" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="最大存活毫秒"><el-input-number v-model="form.poolMaxLifetime" :min="0" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
+          <el-form-item :label="t('poolMaxLifetime')"><el-input-number v-model="form.poolMaxLifetime" :min="0" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="校验超时毫秒"><el-input-number v-model="form.poolValidationTimeout" :min="0" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
+          <el-form-item :label="t('poolValidationTimeout')"><el-input-number v-model="form.poolValidationTimeout" :min="0" controls-position="right" style="width: 100%"></el-input-number></el-form-item>
         </el-col>
         <el-col :span="12">
-          <el-form-item label="状态">
+          <el-form-item :label="t('status')">
             <el-radio-group v-model="form.status">
-              <el-radio :value="1">启用</el-radio>
-              <el-radio :value="0">禁用</el-radio>
+              <el-radio :value="1">{{ t("enabled") }}</el-radio>
+              <el-radio :value="0">{{ t("disabled") }}</el-radio>
             </el-radio-group>
           </el-form-item>
         </el-col>
         <el-col :span="24">
-          <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2"></el-input></el-form-item>
+          <el-form-item :label="t('remark')"><el-input v-model="form.remark" type="textarea" :rows="2"></el-input></el-form-item>
         </el-col>
       </el-row>
     </el-form>
     <template #footer>
-      <el-button @click="formVisible = false">取消</el-button>
-      <el-button type="primary" :loading="saving" @click="onSave">保存</el-button>
+      <el-button @click="formVisible = false">{{ t("cancel") }}</el-button>
+      <el-button type="primary" :loading="saving" @click="onSave">{{ t("save") }}</el-button>
     </template>
   </el-dialog>
 
   <!-- 详情弹窗 -->
-  <el-dialog v-model="detailVisible" title="配置详情" width="860px" top="8vh">
+  <el-dialog v-model="detailVisible" :title="t('detailTitle')" width="860px" top="8vh">
     <div v-if="detail" class="crud-detail-scroll">
       <!-- 基本信息 -->
       <section class="detail-section">
-        <h4 class="detail-section__title">基本信息</h4>
+        <h4 class="detail-section__title">{{ t("sectionBasic") }}</h4>
         <div class="detail-section__grid">
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">配置ID:</span>
+            <span class="info-cell__label">{{ t("configId") }}:</span>
             <span class="info-cell__value">{{ detail.configId }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">实例别名:</span>
+            <span class="info-cell__label">{{ t("alias") }}:</span>
             <span class="info-cell__value">{{ detail.alias }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">数据库名:</span>
+            <span class="info-cell__label">{{ t("databaseName") }}:</span>
             <span class="info-cell__value">
               <el-tag v-for="name in detail.databases" :key="name" size="small" class="database-name-tag">
                 {{ name }}
@@ -286,38 +294,38 @@
             </span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">实例类型:</span>
+            <span class="info-cell__label">{{ t("databaseType") }}:</span>
             <span class="info-cell__value">{{ detail.databaseTypeDesc }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">实例版本:</span>
+            <span class="info-cell__label">{{ t("databaseVersion") }}:</span>
             <span class="info-cell__value">{{ detail.databaseVersion }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">实例地址:</span>
+            <span class="info-cell__label">{{ t("host") }}:</span>
             <span class="info-cell__value">{{ detail.host }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">实例端口:</span>
+            <span class="info-cell__label">{{ t("port") }}:</span>
             <span class="info-cell__value">{{ detail.port }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">实例用户名:</span>
+            <span class="info-cell__label">{{ t("username") }}:</span>
             <span class="info-cell__value">{{ detail.username }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">实例密码:</span>
+            <span class="info-cell__label">{{ t("password") }}:</span>
             <span class="info-cell__value">{{ detail.passwordSet ? "******" : "" }}</span>
           </div>
           <div class="info-cell info-cell--inline info-cell--full">
-            <span class="info-cell__label">实例驱动类:</span>
+            <span class="info-cell__label">{{ t("driverClassFull") }}:</span>
             <span class="info-cell__value">{{ detail.driverClass }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">状态:</span>
+            <span class="info-cell__label">{{ t("status") }}:</span>
             <span class="info-cell__value">
-              <el-tag v-if="detail.status === 1" type="success" size="small">启用</el-tag>
-              <el-tag v-else type="danger" size="small">禁用</el-tag>
+              <el-tag v-if="detail.status === 1" type="success" size="small">{{ t("enabled") }}</el-tag>
+              <el-tag v-else type="danger" size="small">{{ t("disabled") }}</el-tag>
             </span>
           </div>
         </div>
@@ -325,38 +333,38 @@
 
       <!-- 其他信息 -->
       <section class="detail-section">
-        <h4 class="detail-section__title">其他信息</h4>
+        <h4 class="detail-section__title">{{ t("sectionOther") }}</h4>
         <div class="detail-section__grid">
           <div class="info-cell info-cell--inline info-cell--full">
-            <span class="info-cell__label">额外连接属性:</span>
+            <span class="info-cell__label">{{ t("extraConnProps") }}:</span>
             <span class="info-cell__value">{{ detail.connectionProperties }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">最小空闲连接数:</span>
+            <span class="info-cell__label">{{ t("poolMinimumIdle") }}:</span>
             <span class="info-cell__value">{{ detail.poolMinimumIdle }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">最大连接数:</span>
+            <span class="info-cell__label">{{ t("poolMaximumPoolSize") }}:</span>
             <span class="info-cell__value">{{ detail.poolMaximumPoolSize }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">连接超时时间(毫秒):</span>
+            <span class="info-cell__label">{{ t("poolConnectionTimeoutMs") }}:</span>
             <span class="info-cell__value">{{ detail.poolConnectionTimeout }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">空闲连接超时时间(毫秒):</span>
+            <span class="info-cell__label">{{ t("poolIdleTimeoutMs") }}:</span>
             <span class="info-cell__value">{{ detail.poolIdleTimeout }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">连接最大存活时间(毫秒):</span>
+            <span class="info-cell__label">{{ t("poolMaxLifetimeMs") }}:</span>
             <span class="info-cell__value">{{ detail.poolMaxLifetime }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">连接有效性校验超时时间(毫秒):</span>
+            <span class="info-cell__label">{{ t("poolValidationTimeoutMs") }}:</span>
             <span class="info-cell__value">{{ detail.poolValidationTimeout }}</span>
           </div>
           <div class="info-cell info-cell--inline info-cell--full">
-            <span class="info-cell__label">备注:</span>
+            <span class="info-cell__label">{{ t("remark") }}:</span>
             <span class="info-cell__value">{{ detail.remark }}</span>
           </div>
         </div>
@@ -364,39 +372,40 @@
 
       <!-- 审计信息 -->
       <section class="detail-section">
-        <h4 class="detail-section__title">审计信息</h4>
+        <h4 class="detail-section__title">{{ t("sectionAudit") }}</h4>
         <div class="detail-section__grid">
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">创建人名称:</span>
+            <span class="info-cell__label">{{ t("createByName") }}:</span>
             <span class="info-cell__value">{{ detail.createByName }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">创建人类型:</span>
+            <span class="info-cell__label">{{ t("createByType") }}:</span>
             <span class="info-cell__value">{{ detail.createByType }}</span>
           </div>
           <div class="info-cell info-cell--inline info-cell--full">
-            <span class="info-cell__label">创建时间:</span>
+            <span class="info-cell__label">{{ t("createTime") }}:</span>
             <span class="info-cell__value">{{ detail.createTime }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">修改人名称:</span>
+            <span class="info-cell__label">{{ t("updateByName") }}:</span>
             <span class="info-cell__value">{{ detail.updateByName }}</span>
           </div>
           <div class="info-cell info-cell--inline">
-            <span class="info-cell__label">修改人类型:</span>
+            <span class="info-cell__label">{{ t("updateByType") }}:</span>
             <span class="info-cell__value">{{ detail.updateByType }}</span>
           </div>
           <div class="info-cell info-cell--inline info-cell--full">
-            <span class="info-cell__label">修改时间:</span>
+            <span class="info-cell__label">{{ t("updateTime") }}:</span>
             <span class="info-cell__value">{{ detail.updateTime }}</span>
           </div>
         </div>
       </section>
     </div>
     <template #footer>
-      <el-button @click="detailVisible = false">关闭</el-button>
+      <el-button @click="detailVisible = false">{{ t("close") }}</el-button>
     </template>
   </el-dialog>
+  </el-config-provider>
 </div>
 
 <script src="/admin/assets/vue.global.prod.js"></script>
@@ -404,22 +413,25 @@
 <script src="/admin/assets/element-plus-zh-cn.min.js"></script>
 <script src="/admin/assets/element-plus-icons.iife.min.js"></script>
 <script>
-const { createApp, ref, reactive, computed, onMounted } = Vue;
+const { createApp, ref, reactive, computed, onMounted, watch, watchEffect } = Vue;
 const { ElMessage, ElMessageBox } = ElementPlus;
 
 // 实例类型选项与标签色, 与配置表的 database_type 取值一致
+// sort 是下拉与类型卡片的展示序号, 越小越靠前, 按实际使用热度排, 与类型取值无关
 const TYPE_OPTIONS = [
-  { label: "MySQL", value: 0 },
-  { label: "Kingbase8", value: 1 },
-  { label: "PostgreSQL", value: 2 },
-  { label: "SQLServer", value: 4 },
-  { label: "MariaDB", value: 5 },
-  { label: "TiDB", value: 6 },
-  { label: "OceanBase", value: 7 },
-  { label: "SQLite", value: 8 },
-  { label: "MongoDB", value: 9 },
-  { label: "Redis", value: 10 }
+  { label: "MySQL", value: 0, sort: 1 },
+  { label: "Kingbase8", value: 1, sort: 7 },
+  { label: "PostgreSQL", value: 2, sort: 2 },
+  { label: "SQLServer", value: 4, sort: 6 },
+  { label: "MariaDB", value: 5, sort: 8 },
+  { label: "TiDB", value: 6, sort: 9 },
+  { label: "OceanBase", value: 7, sort: 10 },
+  { label: "SQLite", value: 8, sort: 5 },
+  { label: "MongoDB", value: 9, sort: 4 },
+  { label: "Redis", value: 10, sort: 3 }
 ];
+// 展示顺序统一按 sort 取, 改动热度只动上面的 sort 值
+const SORTED_TYPE_OPTIONS = [...TYPE_OPTIONS].sort((a, b) => a.sort - b.sort);
 // 按类型值取色, 用对象而不是数组, 免得类型号不连续时颜色错位
 const TYPE_COLORS = {
   0: "#409eff", 1: "#f56c6c", 2: "#67c23a", 4: "#909399",
@@ -440,25 +452,329 @@ const TYPE_DEFAULTS = {
   10: { driverClass: "", port: 6379 }
 };
 
-// 全部可选列,顺序即默认展示顺序
+// 界面文案词典: zh 为中文原文, en 为英文对照, t 按当前语言取词, tf 对词内的 {占位符} 做替换
+const I18N = {
+  zh: {
+    appTitle: "数据库代理 · 数据源管理",
+    configSource: "配置来源",
+    sourceKindFile: "文件",
+    sourceKindMysql: "MySQL 库表",
+    totalConfigs: "总配置",
+    alias: "实例别名",
+    databaseName: "数据库名",
+    databaseType: "实例类型",
+    all: "全部",
+    status: "状态",
+    enabled: "启用",
+    disabled: "禁用",
+    switchOn: "启用",
+    switchOff: "禁用",
+    search: "搜索",
+    reset: "重置",
+    add: "新增",
+    batchDelete: "删除",
+    reloadConfig: "重载配置",
+    columnSettings: "列设置",
+    noData: "暂无数据",
+    operation: "操作",
+    detail: "详情",
+    edit: "修改",
+    more: "更多",
+    copyAsNew: "再次新增",
+    host: "实例地址",
+    port: "实例端口",
+    username: "实例用户名",
+    password: "实例密码",
+    databases: "所辖数据库",
+    driverClass: "驱动类",
+    driverClassFull: "实例驱动类",
+    databaseVersion: "实例版本",
+    connectionProperties: "连接属性",
+    poolMinimumIdle: "最小空闲连接数",
+    poolMaximumPoolSize: "最大连接数",
+    poolConnectionTimeout: "连接超时毫秒",
+    poolIdleTimeout: "空闲超时毫秒",
+    poolMaxLifetime: "最大存活毫秒",
+    poolValidationTimeout: "校验超时毫秒",
+    remark: "备注",
+    cancel: "取消",
+    save: "保存",
+    ok: "确定",
+    close: "关闭",
+    uniqueIdPlaceholder: "唯一标识",
+    hostPlaceholder: "实例地址",
+    hostSqlitePlaceholder: "数据库文件的绝对路径, 如 /data/app.db",
+    passwordEditPlaceholder: "留空表示保留原密码",
+    passwordAddPlaceholder: "不填则存为空密码",
+    databasesPlaceholder: "多个数据库用英文逗号分隔",
+    databasesSqlitePlaceholder: "建议填 main, 实际由实例地址的文件路径决定",
+    databasesRedisPlaceholder: "逻辑库编号, 多个用英文逗号分隔, 常用 0",
+    driverClassPlaceholder: "如 com.mysql.cj.jdbc.Driver",
+    versionPlaceholder: "仅展示, 如 8.0.36",
+    connPropsPlaceholder: "按 key=value&key=value 填写",
+    detailTitle: "配置详情",
+    sectionBasic: "基本信息",
+    sectionOther: "其他信息",
+    sectionAudit: "审计信息",
+    configId: "配置ID",
+    extraConnProps: "额外连接属性",
+    poolConnectionTimeoutMs: "连接超时时间(毫秒)",
+    poolIdleTimeoutMs: "空闲连接超时时间(毫秒)",
+    poolMaxLifetimeMs: "连接最大存活时间(毫秒)",
+    poolValidationTimeoutMs: "连接有效性校验超时时间(毫秒)",
+    createByName: "创建人名称",
+    createByType: "创建人类型",
+    createTime: "创建时间",
+    updateByName: "修改人名称",
+    updateByType: "修改人类型",
+    updateTime: "修改时间",
+    formAddTitle: "新增数据源",
+    formEditTitle: "编辑数据源",
+    msgRequestFailed: "请求失败",
+    msgQueryFailed: "查询失败: ",
+    msgStatusChangeFailed: "状态修改失败: ",
+    msgEnabled: "已启用",
+    msgDisabled: "已禁用",
+    msgSelectToDelete: "请勾选要删除的配置",
+    msgWarning: "警告",
+    msgNotice: "提示",
+    msgDeleteSuccess: "删除成功",
+    msgDeleteFailed: "删除失败: ",
+    msgConfirmBatchDelete: "确认删除选中的 {n} 条配置？",
+    msgConfirmDeleteRow: "确认删除配置 {alias} ？",
+    msgConfirmReload: "确认重载 MCP 服务数据库连接配置？",
+    msgReloadSuccess: "重载成功, 当前启用配置 {n} 条",
+    msgReloadFailed: "重载失败: ",
+    msgFillDetailFailed: "读取配置详情失败, 请稍后重试",
+    msgAliasRequired: "实例别名不能为空",
+    msgHostSqliteRequired: "实例地址须填数据库文件的绝对路径",
+    msgHostRequired: "实例地址不能为空",
+    msgUsernameRequired: "实例用户名不能为空",
+    msgDatabaseNameRequired: "数据库名不能为空",
+    msgDriverClassRequired: "驱动类不能为空",
+    msgUpdateSuccess: "修改成功",
+    msgAddSuccess: "新增成功",
+    msgSaveFailed: "保存失败: ",
+    msgDetailFailed: "查询详情失败: "
+  },
+  en: {
+    appTitle: "Database Proxy · Datasource Management",
+    configSource: "Config source",
+    sourceKindFile: "File",
+    sourceKindMysql: "MySQL table",
+    totalConfigs: "Total",
+    alias: "Alias",
+    databaseName: "Database",
+    databaseType: "Type",
+    all: "All",
+    status: "Status",
+    enabled: "Enabled",
+    disabled: "Disabled",
+    switchOn: "ON",
+    switchOff: "OFF",
+    search: "Search",
+    reset: "Reset",
+    add: "Add",
+    batchDelete: "Delete",
+    reloadConfig: "Reload",
+    columnSettings: "Columns",
+    noData: "No data",
+    operation: "Actions",
+    detail: "Detail",
+    edit: "Edit",
+    more: "More",
+    copyAsNew: "Copy as new",
+    host: "Host",
+    port: "Port",
+    username: "Username",
+    password: "Password",
+    databases: "Databases",
+    driverClass: "Driver class",
+    driverClassFull: "Driver class",
+    databaseVersion: "Version",
+    connectionProperties: "Connection properties",
+    poolMinimumIdle: "Min idle conns",
+    poolMaximumPoolSize: "Max pool size",
+    poolConnectionTimeout: "Connect timeout (ms)",
+    poolIdleTimeout: "Idle timeout (ms)",
+    poolMaxLifetime: "Max lifetime (ms)",
+    poolValidationTimeout: "Validation timeout (ms)",
+    remark: "Remark",
+    cancel: "Cancel",
+    save: "Save",
+    ok: "OK",
+    close: "Close",
+    uniqueIdPlaceholder: "Unique identifier",
+    hostPlaceholder: "Host",
+    hostSqlitePlaceholder: "Absolute path of the database file, e.g. /data/app.db",
+    passwordEditPlaceholder: "Leave empty to keep the current password",
+    passwordAddPlaceholder: "Leave empty to store an empty password",
+    databasesPlaceholder: "Multiple databases separated by commas",
+    databasesSqlitePlaceholder: "Prefer main; the actual value is decided by the file path",
+    databasesRedisPlaceholder: "Logical DB indexes separated by commas, usually 0",
+    driverClassPlaceholder: "e.g. com.mysql.cj.jdbc.Driver",
+    versionPlaceholder: "Display only, e.g. 8.0.36",
+    connPropsPlaceholder: "key=value&key=value",
+    detailTitle: "Config detail",
+    sectionBasic: "Basic info",
+    sectionOther: "Other info",
+    sectionAudit: "Audit info",
+    configId: "Config ID",
+    extraConnProps: "Extra connection properties",
+    poolConnectionTimeoutMs: "Connect timeout (ms)",
+    poolIdleTimeoutMs: "Idle timeout (ms)",
+    poolMaxLifetimeMs: "Max lifetime (ms)",
+    poolValidationTimeoutMs: "Validation timeout (ms)",
+    createByName: "Created by",
+    createByType: "Creator type",
+    createTime: "Created at",
+    updateByName: "Updated by",
+    updateByType: "Updater type",
+    updateTime: "Updated at",
+    formAddTitle: "Add datasource",
+    formEditTitle: "Edit datasource",
+    msgRequestFailed: "Request failed",
+    msgQueryFailed: "Query failed: ",
+    msgStatusChangeFailed: "Failed to change status: ",
+    msgEnabled: "Enabled",
+    msgDisabled: "Disabled",
+    msgSelectToDelete: "Select configs to delete first",
+    msgWarning: "Warning",
+    msgNotice: "Notice",
+    msgDeleteSuccess: "Deleted",
+    msgDeleteFailed: "Delete failed: ",
+    msgConfirmBatchDelete: "Delete the selected {n} configs?",
+    msgConfirmDeleteRow: "Delete config {alias}?",
+    msgConfirmReload: "Reload MCP database connection configs?",
+    msgReloadSuccess: "Reloaded, {n} enabled configs",
+    msgReloadFailed: "Reload failed: ",
+    msgFillDetailFailed: "Failed to load config detail, please retry",
+    msgAliasRequired: "Alias is required",
+    msgHostSqliteRequired: "Host must be the absolute path of the database file",
+    msgHostRequired: "Host is required",
+    msgUsernameRequired: "Username is required",
+    msgDatabaseNameRequired: "Database is required",
+    msgDriverClassRequired: "Driver class is required",
+    msgUpdateSuccess: "Updated",
+    msgAddSuccess: "Created",
+    msgSaveFailed: "Save failed: ",
+    msgDetailFailed: "Failed to load detail: "
+  }
+};
+
+// 语言状态: 本地持久化, 默认中文
+const LANG_STORAGE_KEY = "database-mcp-go-admin-lang";
+function loadLang() {
+  try {
+    return localStorage.getItem(LANG_STORAGE_KEY) === "en" ? "en" : "zh";
+  } catch (e) { return "zh"; }
+}
+const lang = ref(loadLang());
+watch(lang, v => {
+  try { localStorage.setItem(LANG_STORAGE_KEY, v); } catch (e) { /* 本地存储不可用时只影响记忆 */ }
+});
+// Element Plus 组件内建文案随语言切换: 中文用官方 zh-cn 语言包, 英文走组件默认英文
+const epLocale = computed(() => lang.value === "zh" ? ElementPlusLocaleZhCn : undefined);
+
+// 按当前语言取词, 词典缺词时回退中文原文
+function t(key) {
+  const dict = I18N[lang.value] || I18N.zh;
+  if (dict[key] !== undefined) return dict[key];
+  return I18N.zh[key] !== undefined ? I18N.zh[key] : key;
+}
+// 带占位符的取词, {n} 与 {alias} 这类参数按传入对象替换
+function tf(key, params) {
+  let s = t(key);
+  for (const k in (params || {})) s = s.split("{" + k + "}").join(params[k]);
+  return s;
+}
+
+// 后端报错信息的中英映射: exact 整句匹配, prefixes 前缀匹配并保留参数部分, 未命中的原文透传
+const BACKEND_I18N = {
+  exact: {
+    "仅支持 GET": "Only GET is supported",
+    "仅支持 POST": "Only POST is supported",
+    "配置ID无效": "Invalid config ID",
+    "Content-Type 必须为 application/json": "Content-Type must be application/json",
+    "配置ID不能为空": "Config ID is required",
+    "状态只能为 0 或 1": "Status must be 0 or 1",
+    "请选择要删除的配置": "No configs selected to delete",
+    "实例连接配置正在变更, 请稍后重试": "Configs are being updated, please retry later",
+    "source.file.path 不能为空": "source.file.path is required",
+    "实例别名不能为空": "Alias is required",
+    "数据库名不能为空": "Database is required",
+    "SQL 语句不能为空": "SQL is required"
+  },
+  prefixes: [
+    ["请求体解析失败: ", "Failed to parse request body: "],
+    ["实例连接配置新增失败 - ", "Failed to create instance config - "],
+    ["实例连接配置修改失败 - ", "Failed to update instance config - "],
+    ["实例连接配置删除失败 - ", "Failed to delete instance config - "],
+    ["实例连接配置不存在 - 配置ID: ", "Instance config not found - config ID: "],
+    ["实例连接配置不存在或已删除 - 配置ID: ", "Instance config not found or deleted - config ID: "],
+    ["实例别名已存在: ", "Alias already exists: "],
+    ["实例密码解密失败 - 配置ID: ", "Failed to decrypt instance password - config ID: "],
+    ["实例密码加密失败: ", "Failed to encrypt instance password: "],
+    ["表名不合法: ", "Invalid table name: "],
+    ["连接配置库失败: ", "Failed to connect to the config database: "],
+    ["查询实例连接配置失败: ", "Failed to query instance configs: "],
+    ["遍历实例连接配置失败: ", "Failed to iterate instance configs: "],
+    ["统计实例连接配置数量失败: ", "Failed to count instance configs: "],
+    ["分页查询实例连接配置失败: ", "Failed to page-query instance configs: "],
+    ["统计实例类型数量失败: ", "Failed to count instance types: "],
+    ["读取实例类型数量失败: ", "Failed to read instance type counts: "],
+    ["遍历实例类型数量失败: ", "Failed to iterate instance type counts: "],
+    ["读取实例连接配置失败: ", "Failed to read instance configs: "],
+    ["新增实例连接配置失败: ", "Failed to insert instance config: "],
+    ["获取新增配置ID失败: ", "Failed to get the new config ID: "],
+    ["修改实例连接配置失败: ", "Failed to update instance config: "],
+    ["删除实例连接配置失败: ", "Failed to delete instance config: "],
+    ["读取数据源文件失败: ", "Failed to read the datasource file: "],
+    ["解析数据源文件失败: ", "Failed to parse the datasource file: "],
+    ["序列化数据源文件失败: ", "Failed to serialize the datasource file: "],
+    ["创建数据源文件目录失败: ", "Failed to create the datasource file directory: "],
+    ["创建临时文件失败: ", "Failed to create the temp file: "],
+    ["写入临时文件失败: ", "Failed to write the temp file: "],
+    ["关闭临时文件失败: ", "Failed to close the temp file: "],
+    ["替换数据源文件失败: ", "Failed to replace the datasource file: "]
+  ]
+};
+// 后端报错按语言翻译, 未收录的信息原样透传
+function tBackend(msg) {
+  if (!msg) return msg;
+  if (lang.value !== "en") return msg;
+  if (BACKEND_I18N.exact[msg]) return BACKEND_I18N.exact[msg];
+  for (const [zhPrefix, enPrefix] of BACKEND_I18N.prefixes) {
+    if (msg.startsWith(zhPrefix)) return enPrefix + msg.slice(zhPrefix.length);
+  }
+  return msg;
+}
+
+// 页面标题与 html lang 属性跟随语言
+watchEffect(() => {
+  document.documentElement.lang = lang.value === "zh" ? "zh-CN" : "en";
+  document.title = t("appTitle");
+});
+
+// 全部可选列,顺序即默认展示顺序, 文案按 labelKey 从词典取
 const ALL_COLUMNS = [
-  { prop: "configId", label: "配置ID", width: 85 },
-  { prop: "databaseType", label: "实例类型", width: 110 },
-  { prop: "alias", label: "实例别名", minWidth: 200, tooltip: true },
-  { prop: "databaseName", label: "数据库名", minWidth: 200, tooltip: true },
-  { prop: "host", label: "实例地址", minWidth: 160, tooltip: true },
-  { prop: "port", label: "实例端口", width: 90 },
-  { prop: "username", label: "实例用户名", width: 130, tooltip: true },
-  { prop: "status", label: "状态", width: 100 },
-  { prop: "driverClass", label: "实例驱动类", width: 230, tooltip: true },
-  { prop: "databaseVersion", label: "实例版本", width: 100, tooltip: true },
-  { prop: "poolMinimumIdle", label: "最小空闲连接数", width: 130 },
-  { prop: "poolMaximumPoolSize", label: "最大连接数", width: 130 }
+  { prop: "configId", labelKey: "configId", width: 85 },
+  { prop: "databaseType", labelKey: "databaseType", width: 110 },
+  { prop: "alias", labelKey: "alias", minWidth: 200, tooltip: true },
+  { prop: "databaseName", labelKey: "databaseName", minWidth: 200, tooltip: true },
+  { prop: "host", labelKey: "host", minWidth: 160, tooltip: true },
+  { prop: "port", labelKey: "port", width: 90 },
+  { prop: "username", labelKey: "username", width: 130, tooltip: true },
+  { prop: "status", labelKey: "status", width: 100 },
+  { prop: "driverClass", labelKey: "driverClassFull", width: 230, tooltip: true },
+  { prop: "databaseVersion", labelKey: "databaseVersion", width: 100, tooltip: true },
+  { prop: "poolMinimumIdle", labelKey: "poolMinimumIdle", width: 130 },
+  { prop: "poolMaximumPoolSize", labelKey: "poolMaximumPoolSize", width: 130 }
 ];
 const COLUMN_STORAGE_KEY = "database-mcp-go-admin-columns";
 const DEFAULT_VISIBLE = ["configId", "databaseType", "alias", "databaseName", "host", "port", "username", "status"];
 
-// 统一请求: 非 200 业务码直接抛错,由调用方提示
+// 统一请求: 非 200 业务码直接抛错,由调用方提示; 后端报错在这里统一过一遍语言映射
 async function request(url, options) {
   const resp = await fetch(url, options);
   if (!resp.ok) {
@@ -466,7 +782,7 @@ async function request(url, options) {
   }
   const body = await resp.json();
   if (body.code !== 200) {
-    throw new Error(body.message || "请求失败");
+    throw new Error(tBackend(body.message) || t("msgRequestFailed"));
   }
   return body.data;
 }
@@ -482,7 +798,7 @@ function postJSON(url, payload) {
 const app = createApp({
   setup() {
     const sourceKind = ref("");
-    const typeOptions = TYPE_OPTIONS;
+    const typeOptions = SORTED_TYPE_OPTIONS;
     const query = reactive({ alias: "", databaseName: "", databaseType: undefined, status: undefined, pageNum: 1, pageSize: 10 });
     const list = ref([]);
     const total = ref(0);
@@ -492,17 +808,24 @@ const app = createApp({
     const reloadLoading = ref(false);
     const typeCount = reactive({ totalCount: 0, countMap: {} });
 
-    const allColumns = ALL_COLUMNS;
+    const allColumns = computed(() => ALL_COLUMNS.map(col => ({ ...col, label: t(col.labelKey) })));
     const visibleProps = ref(loadVisibleColumns());
-    const visibleColumns = computed(() => ALL_COLUMNS.filter(col => visibleProps.value.includes(col.prop)));
+    const visibleColumns = computed(() => allColumns.value.filter(col => visibleProps.value.includes(col.prop)));
 
     const typeCards = computed(() => [
-      { key: "total", label: "总配置", value: undefined, color: "#409eff", bg: "#ecf5ff" },
-      ...TYPE_OPTIONS.map(t => ({
-        key: String(t.value), label: t.label, value: t.value,
-        color: TYPE_COLORS[t.value], bg: TYPE_COLORS[t.value] + "14"
+      { key: "total", label: t("totalConfigs"), value: undefined, color: "#409eff", bg: "#ecf5ff" },
+      ...SORTED_TYPE_OPTIONS.map(type => ({
+        key: String(type.value), label: type.label, value: type.value,
+        color: TYPE_COLORS[type.value], bg: TYPE_COLORS[type.value] + "14"
       }))
     ]);
+
+    // 配置来源按语言展示, 未识别的来源原样透出
+    const sourceKindText = computed(() => {
+      if (sourceKind.value === "file") return t("sourceKindFile");
+      if (sourceKind.value === "mysql") return t("sourceKindMysql");
+      return sourceKind.value;
+    });
 
     // 列设置持久化到浏览器本地
     function loadVisibleColumns() {
@@ -560,7 +883,7 @@ const app = createApp({
         list.value = data.list || [];
         total.value = data.total || 0;
       } catch (e) {
-        if (seq === listSeq) ElMessage.error("查询失败: " + e.message);
+        if (seq === listSeq) ElMessage.error(t("msgQueryFailed") + e.message);
       } finally {
         if (seq === listSeq) loading.value = false;
       }
@@ -624,60 +947,69 @@ const app = createApp({
       try {
         await postJSON("/admin/api/status", { configId: row.configId, status: target });
         row.status = target;
-        ElMessage.success(target === 1 ? "已启用" : "已禁用");
+        ElMessage.success(target === 1 ? t("msgEnabled") : t("msgDisabled"));
         loadTypeCount();
       } catch (e) {
-        ElMessage.error("状态修改失败: " + e.message);
+        ElMessage.error(t("msgStatusChangeFailed") + e.message);
         loadList();
       } finally {
         statusLoading[row.configId] = false;
       }
     }
 
+    // 确认框按钮文案随语言走, 服务式 MessageBox 不吃页面内 config-provider 的 locale
+    function confirmBox(message, title) {
+      return ElMessageBox.confirm(message, title, {
+        type: "warning",
+        confirmButtonText: t("ok"),
+        cancelButtonText: t("cancel")
+      });
+    }
+
     async function onBatchDelete() {
       if (selected.value.length === 0) {
-        ElMessage.warning("请勾选要删除的配置");
+        ElMessage.warning(t("msgSelectToDelete"));
         return;
       }
       try {
-        await ElMessageBox.confirm("确认删除选中的 " + selected.value.length + " 条配置？", "警告", { type: "warning" });
+        await confirmBox(tf("msgConfirmBatchDelete", { n: selected.value.length }), t("msgWarning"));
       } catch (e) { return; }
       try {
         const ids = selected.value.map(row => row.configId);
         await postJSON("/admin/api/batch-delete", { configIds: ids });
-        ElMessage.success("删除成功");
+        ElMessage.success(t("msgDeleteSuccess"));
         selected.value = [];
         loadList();
         loadTypeCount();
       } catch (e) {
-        ElMessage.error("删除失败: " + e.message);
+        ElMessage.error(t("msgDeleteFailed") + e.message);
       }
     }
 
     async function onDeleteRow(row) {
       try {
-        await ElMessageBox.confirm("确认删除配置 " + row.alias + " ？", "警告", { type: "warning" });
+        await confirmBox(tf("msgConfirmDeleteRow", { alias: row.alias }), t("msgWarning"));
       } catch (e) { return; }
       try {
         await postJSON("/admin/api/batch-delete", { configIds: [row.configId] });
-        ElMessage.success("删除成功");
+        ElMessage.success(t("msgDeleteSuccess"));
         loadList();
         loadTypeCount();
       } catch (e) {
-        ElMessage.error("删除失败: " + e.message);
+        ElMessage.error(t("msgDeleteFailed") + e.message);
       }
     }
 
     async function onReload() {
       try {
-        await ElMessageBox.confirm("确认重载 MCP 服务数据库连接配置？", "提示", { type: "warning" });
+        await confirmBox(t("msgConfirmReload"), t("msgNotice"));
       } catch (e) { return; }
       reloadLoading.value = true;
       try {
         const count = await postJSON("/admin/api/reload", {});
-        ElMessage.success("重载成功, 当前启用配置 " + count + " 条");
+        ElMessage.success(tf("msgReloadSuccess", { n: count }));
       } catch (e) {
-        ElMessage.error("重载失败: " + e.message);
+        ElMessage.error(t("msgReloadFailed") + e.message);
       } finally {
         reloadLoading.value = false;
       }
@@ -685,7 +1017,8 @@ const app = createApp({
 
     // ==================== 表单弹窗 ====================
     const formVisible = ref(false);
-    const formTitle = ref("新增数据源");
+    const formMode = ref("add");
+    const formTitle = computed(() => formMode.value === "edit" ? t("formEditTitle") : t("formAddTitle"));
     const saving = ref(false);
     const form = reactive(emptyForm());
     let editingId = 0;
@@ -700,9 +1033,22 @@ const app = createApp({
       };
     }
 
+    // 地址与库名与密码的占位文案按类型区分, 随语言与类型联动
+    function hostPlaceholder() {
+      return form.databaseType === 8 ? t("hostSqlitePlaceholder") : t("hostPlaceholder");
+    }
+    function databasesPlaceholder() {
+      if (form.databaseType === 8) return t("databasesSqlitePlaceholder");
+      if (form.databaseType === 10) return t("databasesRedisPlaceholder");
+      return t("databasesPlaceholder");
+    }
+    function passwordPlaceholder() {
+      return form.configId ? t("passwordEditPlaceholder") : t("passwordAddPlaceholder");
+    }
+
     async function openForm(row, copy) {
       editingId = row && !copy ? row.configId : 0;
-      formTitle.value = row && !copy ? "编辑数据源" : "新增数据源";
+      formMode.value = row && !copy ? "edit" : "add";
       Object.assign(form, emptyForm());
       if (row) {
         Object.assign(form, {
@@ -725,7 +1071,7 @@ const app = createApp({
         // 连接池完整参数由详情接口补齐,先取到再开弹窗;取不到就中止,避免用默认值把真实参数覆盖掉
         const filled = await fillPoolFromDetail(row.configId);
         if (!filled) {
-          ElMessage.error("读取配置详情失败, 请稍后重试");
+          ElMessage.error(t("msgFillDetailFailed"));
           return;
         }
       }
@@ -756,27 +1102,27 @@ const app = createApp({
     async function onSave() {
       const isSqlite = form.databaseType === 8;
       const noAccount = form.databaseType === 8 || form.databaseType === 9 || form.databaseType === 10;
-      if (!form.alias) { ElMessage.warning("实例别名不能为空"); return; }
-      if (!form.host) { ElMessage.warning(isSqlite ? "实例地址须填数据库文件的绝对路径" : "实例地址不能为空"); return; }
-      if (!noAccount && !form.username) { ElMessage.warning("实例用户名不能为空"); return; }
-      if (!form.databaseName) { ElMessage.warning("数据库名不能为空"); return; }
-      if (!noAccount && !form.driverClass) { ElMessage.warning("驱动类不能为空"); return; }
+      if (!form.alias) { ElMessage.warning(t("msgAliasRequired")); return; }
+      if (!form.host) { ElMessage.warning(isSqlite ? t("msgHostSqliteRequired") : t("msgHostRequired")); return; }
+      if (!noAccount && !form.username) { ElMessage.warning(t("msgUsernameRequired")); return; }
+      if (!form.databaseName) { ElMessage.warning(t("msgDatabaseNameRequired")); return; }
+      if (!noAccount && !form.driverClass) { ElMessage.warning(t("msgDriverClassRequired")); return; }
       const payload = { ...form };
       delete payload.configId;
       saving.value = true;
       try {
         if (editingId > 0) {
           await postJSON("/admin/api/update", { configId: editingId, ...payload });
-          ElMessage.success("修改成功");
+          ElMessage.success(t("msgUpdateSuccess"));
         } else {
           await postJSON("/admin/api/create", payload);
-          ElMessage.success("新增成功");
+          ElMessage.success(t("msgAddSuccess"));
         }
         formVisible.value = false;
         loadList();
         loadTypeCount();
       } catch (e) {
-        ElMessage.error("保存失败: " + e.message);
+        ElMessage.error(t("msgSaveFailed") + e.message);
       } finally {
         saving.value = false;
       }
@@ -791,7 +1137,7 @@ const app = createApp({
         detail.value = await request("/admin/api/detail?id=" + row.configId);
         detailVisible.value = true;
       } catch (e) {
-        ElMessage.error("查询详情失败: " + e.message);
+        ElMessage.error(t("msgDetailFailed") + e.message);
       }
     }
 
@@ -814,17 +1160,19 @@ const app = createApp({
     });
 
     return {
-      sourceKind, typeOptions, typeCards, query, list, total, loading, selected, statusLoading, reloadLoading,
+      lang, epLocale, t, tf, sourceKindText,
+      typeOptions, typeCards, query, list, total, loading, selected, statusLoading, reloadLoading,
       typeCount, allColumns, visibleProps, visibleColumns,
       typeColorOf, typeCountOf, formatCell, scheduleQuery, onSearch, onReset, onTypeCardClick, onPageChange, onSizeChange,
       onStatusChange, onBatchDelete, onReload, toggleColumn,
+      hostPlaceholder, databasesPlaceholder, passwordPlaceholder,
       formVisible, formTitle, form, saving, openForm, onTypeChange, onSave,
       detailVisible, detail, openDetail, onCommand
     };
   }
 });
 
-app.use(ElementPlus, { locale: ElementPlusLocaleZhCn });
+app.use(ElementPlus);
 Object.entries(ElementPlusIconsVue || {}).forEach(([key, component]) => app.component(key, component));
 app.mount("#app");
 </script>
